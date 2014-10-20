@@ -1,5 +1,5 @@
 <?php
-namespace KTools\libs;
+namespace Kangell\Libs;
 
 
 /**

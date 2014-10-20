@@ -1,5 +1,6 @@
 <?php
-namespace KTools\libs;
+// compatial PSR-0
+namespace Kangell\Libs;
 
 
 /**
