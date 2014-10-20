@@ -1,4 +1,7 @@
 <?php
+// WrapCurl.php
+namespace KTools\libs\WrapCurl
+
 
 /**
  * Usage: $res = WrapCurl::request('http://www.163.com')
