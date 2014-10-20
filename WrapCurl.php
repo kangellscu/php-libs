@@ -1,10 +1,9 @@
 <?php
-// WrapCurl.php
-namespace KTools\libs\WrapCurl
+namespace KTools\libs;
 
 
 /**
- * Usage: $res = WrapCurl::request('http://www.163.com')
+ * Usage: $res = WrapCurl::get('http://www.163.com')
  */
 class WrapCurl {
     /**
