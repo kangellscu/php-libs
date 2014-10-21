@@ -12,7 +12,7 @@ namespace Kangell\Autoload;
  * $loader->add("A\B', __DIR__ . "/BBB");
  *
  * // register class file
- * $loader->add('A\B\C\MyClass', '/path/to/file');
+ * $loader->addClassMap('A\B\C\MyClass', '/path/to/file');
  * 
  * // active the autoloader
  * $loader->register();
@@ -41,6 +41,67 @@ class ClassLoader
     // PSR-0
     private $prefixesPSR0 = array();
     private $fallbackDirsPSR0 = array();
+
+    private $useIncludePath = false;
+    private $classMap = array();
+
+
+    public function getPrefixes() {
+        return $this->prefixesPSR0;
+    }
+
+
+    public function getFallbackDirs() {
+        return $this->fallbackDirs;
+    }
+
+
+    public function getPrefixesPSR4() {
+
+    }
+
+
+    public function getFallbackDirsPSR4() {
+
+    }
+
+
+    /**
+     * Can be used to check if the autoloader uses the include path to check
+     * for classes.
+     *
+     * @return boolean
+     */
+    public function getUseIncludePath() {
+        return $this->useIncludePath;
+    }
+
+
+    /**
+     * Turns on|off searching the include path for class files.
+     *
+     * @param boolean $useIncludePath
+     */
+    public function setUseIncludePath($useIncludePath) {
+        $this->useIncludePath = $useIncludePath;
+    }
+
+
+    public function getClassMap() {
+
+    }
+
+
+    /**
+     * @param array $classMap class to filename map
+     *      eg:
+     *          array(
+     *              "A\B\C\MyClass" => "path/to/MyClass.php"
+     *          )
+     */
+    public function addClassMap(array $classMap) {
+        $this->classMap = array_merge($this->classMap, $classMap);
+    }    
 
 
     /**
@@ -130,25 +191,91 @@ class ClassLoader
 
 
     public function loadClass($class) {
+        if ($file = $this->findFile($class)) {
+            includeFile($file);
 
-    }
-
-
-    /**
-     * If a file exists, require it from the file system
-     *
-     * @param string $file the file to require
-     * 
-     * @return boolean True if the file exists, false if not
-     */
-    protected function requireFile($file) {
-        if (file_exists($file)) {
-            require $file;
             return true;
         }
 
         return false;
     }
+
+
+    /**
+     * Finds the path to the file where the class is defined.
+     *
+     * @param string $class The name of the class
+     *
+     * @return string|false The path if found, false otherwise
+     */
+    public function findFile($class) {
+        // work around for PHP 5.3.0 - 5.3.2 https://bugs.php.net/50731
+        if ("\\" == $class[0]) {
+            $class = substr($class, 1);
+        }
+
+        // class map lookup
+        if (isset($this->classMap[$class])) {
+            return $this->classMap[$class];
+        }
+
+        $logicalClassPath = strtr($class, "\\", DIRECTORY_SEPARATOR);
+        $first = $class[0];
+
+        // PSR-4 lookup
+        
+        // PSR-4 fallback dirs
+
+
+        // PSR-0 lookup
+        if (false !== ($pos = strrpos($class, DIRECTORY_SEPARATOR))) {
+            // namespaced class name 
+            $logicalPathPSR0 = substr($logicalClassPath, 0, $pos + 1)
+                . strtr(substr($logicalClassPath, $pos + 1), "_", DIRECTORY_SEPARATOR)
+                . ".php";
+        } else {
+            // PEAR-like class name
+            $logicalPathPSR0 = strtr($class, "_", DIRECTORY_SEPARATOR) . ".php";
+        }
+
+        if (isset($this->prefixesPSR0[$first])) {
+            foreach ($this->prefixesPSR0[$first] as $prefix => $dirs) {
+                if (0 !== strpos($class, $prefix)) {
+                    continue;
+                }
+                foreach ($dirs as $dir) {
+                    if (file_exists($file = $dir . DIRECTORY_SEPARATOR . $logicalPathPSR0)) {
+                        return $file;
+                    }
+                }
+            }
+        }
+        
+        // PSR-0 fallback dirs
+        foreach ($this->fallbackDirsPSR0 as $dir) {
+            if (file_exists($file = $dir . DIRECTORY_SEPARATOR . $logicalPathPSR0)) {
+                return $file;
+            }
+        }
+        
+        // PSR-0 include paths
+        if ($this->useIncludePath && $file = stream_resolve_include_path($logicalPathPSR0)) {
+            return $file;
+        }
+
+        // Remember that this class does not exist
+        return $this->classMap[$class] = false;
+    }
 }
 
+
+/**
+ * Scope isolated include.
+ *
+ * Prevents access to $this/self from included files.
+ */
+function includeFile($file)
+{
+    include $file;
+}
 /* End of file */
