@@ -6,6 +6,9 @@ namespace Kangell\Libs;
  * Usage: $res = WrapCurl::get('http://www.163.com')
  */
 class WrapCurl {
+    const ERROR_REQUEST = "-1000";
+    const ERROR_OK = "0";
+
     /**
      * Get request
      *

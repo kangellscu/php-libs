@@ -6,6 +6,21 @@ use Kangell\Libs\WrapCurl;
 
 class WxPay
 {
+    private $appId;
+    private $appKey;
+    private $appSecret;
+
+
+    public function __construct(
+        $appId=NULL, $appKey=NULL, $appSecret=NULL, $partnerId=NULL, $notifyUrl=NULL
+    ) {
+        $this->appId = $appId ?: Config::$appId;
+        $this->appKey = $appKey ?: Config::$appKey;
+        $this->appSecret = $appSecret ?: Config::$appSecret;
+        $this->partnerId = $partnerId ?: Config::$partnerId;
+        $this->notifyUrl = $notifyUrl ?: Config::$notifyUrl;
+    }
+
     /*********** Native pay begin ***********/
 
     /**
@@ -20,11 +35,11 @@ class WxPay
      */
     public function nativePayUrl($productId) {
         $params = array(
-            "appId" => Config::$appId,
+            "appId" => $this->appId,
             "timestamp" => time(),
             "noncestr" => Util::genRandomStr(),
             "productid" => $productId,
-            "appkey" => Config::$appKey,
+            "appkey" => $this->appKey,
         );
 
         $sign = Util::genSignStr($params);
@@ -49,6 +64,94 @@ class WxPay
     }
 
     /*********** Native pay end *************/
+
+
+    /*********** App pay begin **************/
+
+    /**
+     * 生成预支付订单
+     * 商户使用access_token，生成预付费订单package，提交到WX，获取prepayId
+     * 签名后返回给客户端支付参数
+     *
+     * 由商户发起
+     *
+     * @Method("POST")
+     *
+     * 
+     * @return string $payInfo
+     */
+    public function genPrePay(
+        $accessToken, $productDesc, $attach, $outTradeNo, $totalFee, $userIp
+    ) {
+        // 商户自定义，用于订单的查询与跟踪
+        $traceId;
+        $feeType = Config::FEE_TYPE_RMB;
+        $inputCharset = Config::$charset;
+
+        $package = Util::genPackage();
+
+        // TODO post to prePayUrl and get prepayId
+        $prePayUrl = Config::$url["appPrePayUrl"];
+
+        // TODO resign prepayId
+        $reSignData = array();
+        $payInfo = "";
+
+        return $payInfo;
+    }
+
+
+    /**
+     * 调用微信API需要提供access_token，由微信验证请求的合法性
+     * 每天获取次数有限制，正常情况下access_token有效期为7200s，
+     * 重复获取将导致上次获取的access_token失效
+     * 
+     * 由商户发起
+     * 
+     * @Method("GET")
+     * 
+     * @return array $accessToken Format as below:
+     *      array(
+     *          "code" => 0,        // 0 stand for success
+     *          "accessToken" => "abcdse",  // 最大长度为512 bytes
+     *          "expiresIn" => 7200,        // 过期时间
+     *      )
+     *      or 
+     *      array(
+     *          "code" => 40013,
+     *          "errmsg" => "invalid appid",
+     *      )
+     */
+    public function getAccessToken() {
+        $querys = array(
+            "grant_type" => "client_credential",
+            "appid" => $this->appId,
+            "secret" => $this->appSecret,
+        );
+
+        $res = WrapCurl::get(Config::$url["apiTokenUrl"], $querys);
+        $resData = json_decode($res, true);
+
+        if ( ! $resData) {
+            return array(
+                "code" => WrapCurl::ERROR_REQUEST,
+                "errmsg" => "系统繁忙，请稍候重试",
+            );
+        } else if ($resData["errcode"]) {
+            return array(
+                "code" => $resData["errcode"],
+                "errmsg" => $resData["errmsg"],
+            );
+        } else {
+            return array(
+                "code" => WrapCurl::ERROR_OK,
+                "accessToken" => $resData["access_token"],
+                "expiresIn" => $resData["expires_in"],
+            );
+        }
+    }
+
+    /*********** App pay end ****************/
 
     
     /**
@@ -77,9 +180,11 @@ class WxPay
      *
      * @Method("GET")
      */
+    /*
     public function getAccessToken() {
 
     }
+     */
 
 
     /**
