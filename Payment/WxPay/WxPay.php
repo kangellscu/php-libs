@@ -81,41 +81,29 @@ class WxPay
     /*********** App pay begin **************/
 
     /**
-     * app获取支付参数用于app内支付
-     *
-     * 由app发起
-     *
-     */
-    public function getPayParm($accessToken) {
-        $prePayId = $this->genPrePay($accessToken);
-
-        // TODO resign prepayId
-        $reSignData = array();
-        $payInfo = "";
-
-        return $payInfo;
-    }
-
-    /**
      * 生成预支付订单
      * 商户使用access_token，生成预付费订单package，提交到WX，获取prepayId
-     * 签名后返回给客户端支付参数
+     * 签名后返回给客户端支付参数, app使用这些参数在app内部支付
      *
      * 由商户发起
      *
      * @Method("POST")
      *
+     * @param string accessToken
      * 
-     * @return string $payInfo
+     * @return array $appPayParam
      */
     public function genPrePay($accessToken) {
+        $timestamp = (string) time();
+        $noncestr = Util::genRandomStr();
+
         $package = Util::genPackage($this->packageParams, $this->partnerKey);
         $payParam = array(
             "appid" => $this->appId,
             "appkey" => $this->appKey,
-            "noncestr" => Util::genRandomStr(),
+            "noncestr" => $noncestr,
             "package" => $package,
-            "timestamp" => (string) time(),
+            "timestamp" => $timestamp, 
             "traceid" => $Config::$APP_PARTNER . "_" . $this->packageParams['out_trade_no'],
         );
         $paySign = Util::genSignStr($payParam);
@@ -130,11 +118,24 @@ class WxPay
         if ( ! $resData) {
             throw \Exception("fatal error: call prepay failed");
         }
-        if ($resData['errcode'] != "0") {
+        if ($resData["errcode"] != "0") {
             throw \Exception("fatal error: prepay failed; errmsg: " . $resData["errmsg"]);
         }
 
-        return array($resData["prepayid"], NULL);
+        // Resign
+        $appPayParam = array(
+            "appid" => $this->appId,
+            "appkey" => $this->appKey,
+            "noncestr" => $noncestr,
+            "package" => "Sign=WXPay",
+            "partnerid" => $this->partnerId,
+            "prepayid" => $resData["prepayid"],
+            "timestamp" => $timestamp,
+        );
+        $sign = Util::genSignStr($appPayParam);
+        $appPayParam["sign"] = $sign;
+        
+        return $appPayParam;
     }
 
 
