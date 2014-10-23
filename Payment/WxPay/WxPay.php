@@ -10,16 +10,21 @@ class WxPay
     private $appKey;
     private $appSecret;
 
+    private $packageParams;
+
 
     public function __construct(
         $appId=NULL, $appKey=NULL, $appSecret=NULL, $partnerId=NULL, $notifyUrl=NULL
     ) {
-        $this->appId = $appId ?: Config::$appId;
-        $this->appKey = $appKey ?: Config::$appKey;
-        $this->appSecret = $appSecret ?: Config::$appSecret;
-        $this->partnerId = $partnerId ?: Config::$partnerId;
-        $this->notifyUrl = $notifyUrl ?: Config::$notifyUrl;
+        $this->appId = $appId ?: Config::$APP_ID;
+        $this->appKey = $appKey ?: Config::$APP_KEY;
+        $this->appSecret = $appSecret ?: Config::$APP_SECRET;
+        $this->partnerId = $partnerId ?: Config::$PARTNER_ID;
+        $this->notifyUrl = $notifyUrl ?: Config::$NOTIFY_URL;
+
+        $this->packageParams = array();
     }
+
 
     /*********** Native pay begin ***********/
 
@@ -45,7 +50,7 @@ class WxPay
         $sign = Util::genSignStr($params);
         $params['sign'] = $sign;
 
-        $paymentUrl = Config::$url['nativePayUrl'] . "?" . http_build_query($params);
+        $paymentUrl = Config::$URLS['nativePayUrl'] . "?" . http_build_query($params);
 
         return $paymentUrl;
     }
@@ -65,8 +70,31 @@ class WxPay
 
     /*********** Native pay end *************/
 
+    public function setPackageParams(array $params) {
+        $this->packageParams = array();
+        foreach ($params as $key => $value) {
+            $this->packageParams[$key] = $value ?: NULL;
+        }
+    }
+
 
     /*********** App pay begin **************/
+
+    /**
+     * app获取支付参数用于app内支付
+     *
+     * 由app发起
+     *
+     */
+    public function getPayParm($accessToken) {
+        $prePayId = $this->genPrePay($accessToken);
+
+        // TODO resign prepayId
+        $reSignData = array();
+        $payInfo = "";
+
+        return $payInfo;
+    }
 
     /**
      * 生成预支付订单
@@ -80,24 +108,33 @@ class WxPay
      * 
      * @return string $payInfo
      */
-    public function genPrePay(
-        $accessToken, $productDesc, $attach, $outTradeNo, $totalFee, $userIp
-    ) {
-        // 商户自定义，用于订单的查询与跟踪
-        $traceId;
-        $feeType = Config::FEE_TYPE_RMB;
-        $inputCharset = Config::$charset;
+    public function genPrePay($accessToken) {
+        $package = Util::genPackage($this->packageParams, $this->partnerKey);
+        $payParam = array(
+            "appid" => $this->appId,
+            "appkey" => $this->appKey,
+            "noncestr" => Util::genRandomStr(),
+            "package" => $package,
+            "timestamp" => (string) time(),
+            "traceid" => $Config::$APP_PARTNER . "_" . $this->packageParams['out_trade_no'],
+        );
+        $paySign = Util::genSignStr($payParam);
+        $payParam["app_signature"] = $paySign;
+        $payParam["sign_method"] = "sha1";
 
-        $package = Util::genPackage();
-
-        // TODO post to prePayUrl and get prepayId
+        // Post to prePayUrl and get prepayId
         $prePayUrl = Config::$url["appPrePayUrl"];
+        $res = WrapCurl::post($prePayUrl, $paySign);
 
-        // TODO resign prepayId
-        $reSignData = array();
-        $payInfo = "";
+        $resData = json_decode($res, true);
+        if ( ! $resData) {
+            throw \Exception("fatal error: call prepay failed");
+        }
+        if ($resData['errcode'] != "0") {
+            throw \Exception("fatal error: prepay failed; errmsg: " . $resData["errmsg"]);
+        }
 
-        return $payInfo;
+        return array($resData["prepayid"], NULL);
     }
 
 
